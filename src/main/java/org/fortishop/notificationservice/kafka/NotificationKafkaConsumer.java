@@ -53,7 +53,6 @@ public class NotificationKafkaConsumer {
 
     @KafkaListener(topics = "point.changed", groupId = "notification-group", containerFactory = "pointChangedListenerContainerFactory")
     public void consumePointChanged(PointChangedEvent event) {
-        log.info("포인트 알림 전송 확인 - memberId={}, type={}", event.getMemberId(), event.getChangeType());
         if (!settingService.isEnabled(event.getMemberId(), NotificationType.POINT)) {
             return;
         }

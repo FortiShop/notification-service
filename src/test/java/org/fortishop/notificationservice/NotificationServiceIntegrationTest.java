@@ -480,6 +480,7 @@ public class NotificationServiceIntegrationTest {
         );
 
         sendKafkaMessage("point.changed", memberId.toString(), payload);
+        Thread.sleep(30000);
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
             assertThat(list).isNotEmpty();
