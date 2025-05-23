@@ -1,19 +1,30 @@
 package org.fortishop.notificationservice;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.fortishop.notificationservice.domain.Notification;
 import org.fortishop.notificationservice.domain.NotificationSetting;
 import org.fortishop.notificationservice.domain.NotificationStatus;
@@ -25,6 +36,7 @@ import org.fortishop.notificationservice.dto.request.NotificationTemplateRequest
 import org.fortishop.notificationservice.repository.NotificationRepository;
 import org.fortishop.notificationservice.repository.NotificationSettingRepository;
 import org.fortishop.notificationservice.repository.NotificationTemplateRepository;
+import org.fortishop.notificationservice.utils.NotificationOrderClient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +46,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -59,6 +72,7 @@ import org.testcontainers.utility.DockerImageName;
         }
 )
 @Testcontainers
+@Import(NotificationOrderClientMockConfig.class)
 @ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class NotificationServiceIntegrationTest {
@@ -77,6 +91,9 @@ public class NotificationServiceIntegrationTest {
 
     @Autowired
     NotificationTemplateRepository templateRepository;
+
+    @Autowired
+    NotificationOrderClient orderClient;
 
     @Container
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
@@ -138,7 +155,7 @@ public class NotificationServiceIntegrationTest {
     private static boolean topicCreated = false;
 
     @BeforeAll
-    void initKafkaTopics() throws Exception {
+    void initKafkaTopics() {
         System.out.println("Kafka UI is available at: http://" + kafkaUi.getHost() + ":" + kafkaUi.getMappedPort(8080));
         String bootstrapServers = kafka.getHost() + ":" + kafka.getMappedPort(9093);
         List<String> topics = List.of(
@@ -149,25 +166,39 @@ public class NotificationServiceIntegrationTest {
                 "delivery.completed"
         );
         if (!topicCreated) {
-            for (String topic : topics) {
-                createTopicIfNotExists(topic, bootstrapServers);
+            try (AdminClient admin = AdminClient.create(Map.of(
+                    AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers
+            ))) {
+                Set<String> existingTopics = admin.listTopics().names().get(3, TimeUnit.SECONDS);
+
+                for (String topic : topics) {
+                    if (!existingTopics.contains(topic)) {
+                        try {
+                            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1)))
+                                    .all().get(3, TimeUnit.SECONDS);
+                            System.out.println("✅ Kafka 토픽 생성됨: " + topic);
+                        } catch (ExecutionException e) {
+                            if (e.getCause() instanceof org.apache.kafka.common.errors.TopicExistsException) {
+                                System.out.println("⚠️ Kafka 토픽 이미 존재함 (무시): " + topic);
+                            } else {
+                                throw e;
+                            }
+                        }
+                    } else {
+                        System.out.println("📌 Kafka 토픽 존재함: " + topic);
+                    }
+                }
+                topicCreated = true;
+
+            } catch (Exception e) {
+                throw new RuntimeException("Kafka 토픽 초기화 중 오류 발생", e);
             }
-            topicCreated = true;
         }
     }
 
-    private static void createTopicIfNotExists(String topic, String bootstrapServers) {
-        Properties config = new Properties();
-        config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        try (AdminClient admin = AdminClient.create(config)) {
-            Set<String> existingTopics = admin.listTopics().names().get(3, TimeUnit.SECONDS);
-            if (!existingTopics.contains(topic)) {
-                admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1)))
-                        .all().get(3, TimeUnit.SECONDS);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Kafka 토픽 생성 실패: " + topic, e);
-        }
+    @BeforeEach
+    void setUpMock() {
+        when(orderClient.getMemberIdByOrderId(anyLong())).thenReturn(1L);
     }
 
     @BeforeEach
@@ -258,7 +289,7 @@ public class NotificationServiceIntegrationTest {
         NotificationSettingRequest request = new NotificationSettingRequest(NotificationType.ORDER, false);
 
         ResponseEntity<String> response = restTemplate.exchange(
-                getBaseUrl("/api/notifications/settings"), HttpMethod.PUT,
+                getBaseUrl("/api/notifications/settings"), HttpMethod.PATCH,
                 new HttpEntity<>(request, headers), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -298,7 +329,7 @@ public class NotificationServiceIntegrationTest {
                 "수정 메시지");
 
         ResponseEntity<String> response = restTemplate.exchange(
-                getBaseUrl("/api/notifications/templates/" + saved.getId()), HttpMethod.PUT,
+                getBaseUrl("/api/notifications/templates/" + saved.getId()), HttpMethod.PATCH,
                 new HttpEntity<>(request, headers), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -369,5 +400,137 @@ public class NotificationServiceIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("검색용");
+    }
+
+    private void sendKafkaMessage(String topic, String key, Object value) {
+        KafkaProducer<String, Object> producer = new KafkaProducer<>(Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getHost() + ":" + kafka.getMappedPort(9093),
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class
+        ));
+        producer.send(new ProducerRecord<>(topic, key, value));
+        producer.flush();
+        producer.close();
+    }
+
+    @Test
+    @DisplayName("Kafka - payment.completed 수신 시 알림이 생성된다")
+    void kafka_paymentCompleted_createsNotification() throws InterruptedException {
+        // given
+        Long orderId = 9001L;
+        Long memberId = 1L;
+
+        Map<String, Object> payload = Map.of(
+                "orderId", orderId,
+                "paymentId", 777L,
+                "paidAmount", 12000,
+                "method", "CARD",
+                "timestamp", LocalDateTime.now().toString(),
+                "traceId", UUID.randomUUID().toString()
+        );
+
+        // when
+        sendKafkaMessage("payment.completed", orderId.toString(), payload);
+        // then
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
+            assertThat(list).isNotEmpty();
+            assertThat(list.get(0).getType()).isEqualTo(NotificationType.ORDER);
+            assertThat(list.get(0).getMessage()).contains("결제가 완료되었습니다");
+        });
+    }
+
+    @Test
+    @DisplayName("Kafka - payment.failed 수신 시 알림이 생성된다")
+    void kafka_paymentFailed_createsNotification() throws InterruptedException {
+        Long orderId = 9002L;
+        Long memberId = 1L;
+
+        Map<String, Object> payload = Map.of(
+                "orderId", orderId,
+                "reason", "카드 한도 초과",
+                "timestamp", LocalDateTime.now().toString(),
+                "traceId", UUID.randomUUID().toString()
+        );
+
+        sendKafkaMessage("payment.failed", orderId.toString(), payload);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
+            assertThat(list).isNotEmpty();
+            assertThat(list.get(0).getType()).isEqualTo(NotificationType.ORDER);
+            assertThat(list.get(0).getMessage()).contains("결제가 실패하였습니다");
+        });
+    }
+
+    @Test
+    @DisplayName("Kafka - point.changed 수신 시 알림이 생성된다")
+    void kafka_pointChanged_createsNotification() throws InterruptedException {
+        Long memberId = 2L;
+
+        Map<String, Object> payload = Map.of(
+                "memberId", memberId,
+                "orderId", 9003L,
+                "changeType", "SAVE",
+                "amount", 1500,
+                "reason", "리뷰 작성 적립",
+                "transactionId", UUID.randomUUID().toString(),
+                "timestamp", LocalDateTime.now().toString(),
+                "traceId", UUID.randomUUID().toString(),
+                "sourceService", "order-payment-service"
+        );
+
+        sendKafkaMessage("point.changed", memberId.toString(), payload);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
+            assertThat(list).isNotEmpty();
+            assertThat(list.get(0).getType()).isEqualTo(NotificationType.POINT);
+            assertThat(list.get(0).getMessage()).contains("포인트가 적립되었습니다");
+        });
+    }
+
+    @Test
+    @DisplayName("Kafka - delivery.started 수신 시 알림이 생성된다")
+    void kafka_deliveryStarted_createsNotification() throws InterruptedException {
+        Long orderId = 9004L;
+        Long memberId = 1L;
+
+        Map<String, Object> payload = Map.of(
+                "orderId", orderId,
+                "deliveryId", 111L,
+                "trackingNumber", "TRACK123",
+                "company", "CJ대한통운",
+                "startedAt", LocalDateTime.now(),
+                "traceId", UUID.randomUUID().toString()
+        );
+
+        sendKafkaMessage("delivery.started", orderId.toString(), payload);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
+            assertThat(list).isNotEmpty();
+            assertThat(list.get(0).getType()).isEqualTo(NotificationType.DELIVERY);
+            assertThat(list.get(0).getMessage()).contains("배송이 시작되었습니다");
+        });
+    }
+
+    @Test
+    @DisplayName("Kafka - delivery.completed 수신 시 알림이 생성된다")
+    void kafka_deliveryCompleted_createsNotification() throws InterruptedException {
+        Long orderId = 9005L;
+        Long memberId = 1L;
+
+        Map<String, Object> payload = Map.of(
+                "orderId", orderId,
+                "deliveryId", 222L,
+                "completedAt", LocalDateTime.now(),
+                "traceId", UUID.randomUUID().toString()
+        );
+
+        sendKafkaMessage("delivery.completed", orderId.toString(), payload);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
+            assertThat(list).isNotEmpty();
+            assertThat(list.get(0).getType()).isEqualTo(NotificationType.DELIVERY);
+            assertThat(list.get(0).getMessage()).contains("배송이 완료되었습니다");
+        });
     }
 }

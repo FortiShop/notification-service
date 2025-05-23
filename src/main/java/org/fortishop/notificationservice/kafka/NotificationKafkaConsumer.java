@@ -25,7 +25,7 @@ public class NotificationKafkaConsumer {
     private final NotificationOrderClient orderClient;
     private final SseEmitterManager sseEmitterManager;
 
-    @KafkaListener(topics = "payment.completed", groupId = "notification-group", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "payment.completed", groupId = "notification-group", containerFactory = "paymentCompletedListenerContainerFactory")
     public void consumePaymentCompleted(PaymentCompletedEvent event) {
         Long memberId = orderClient.getMemberIdByOrderId(event.getOrderId());
         if (memberId == null || !settingService.isEnabled(memberId, NotificationType.ORDER)) {
@@ -38,7 +38,7 @@ public class NotificationKafkaConsumer {
         log.info("결제 성공 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
     }
 
-    @KafkaListener(topics = "payment.failed", groupId = "notification-group", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "payment.failed", groupId = "notification-group", containerFactory = "paymentFailedListenerContainerFactory")
     public void consumePaymentFailed(PaymentFailedEvent event) {
         Long memberId = orderClient.getMemberIdByOrderId(event.getOrderId());
         if (memberId == null || !settingService.isEnabled(memberId, NotificationType.ORDER)) {
@@ -51,8 +51,9 @@ public class NotificationKafkaConsumer {
         log.info("결제 실패 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
     }
 
-    @KafkaListener(topics = "point.changed", groupId = "notification-group", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "point.changed", groupId = "notification-group", containerFactory = "pointChangedListenerContainerFactory")
     public void consumePointChanged(PointChangedEvent event) {
+        log.info("포인트 알림 전송 확인 - memberId={}, type={}", event.getMemberId(), event.getChangeType());
         if (!settingService.isEnabled(event.getMemberId(), NotificationType.POINT)) {
             return;
         }
@@ -70,7 +71,7 @@ public class NotificationKafkaConsumer {
         log.info("포인트 알림 전송 완료 - memberId={}, type={}", event.getMemberId(), event.getChangeType());
     }
 
-    @KafkaListener(topics = "delivery.started", groupId = "notification-group", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "delivery.started", groupId = "notification-group", containerFactory = "deliveryStartedListenerContainerFactory")
     public void consumeDeliveryStarted(DeliveryStartedEvent event) {
         Long memberId = orderClient.getMemberIdByOrderId(event.getOrderId());
         if (memberId == null || !settingService.isEnabled(memberId, NotificationType.DELIVERY)) {
@@ -83,7 +84,7 @@ public class NotificationKafkaConsumer {
         log.info("배송 시작 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
     }
 
-    @KafkaListener(topics = "delivery.completed", groupId = "notification-group", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "delivery.completed", groupId = "notification-group", containerFactory = "deliveryCompletedListenerContainerFactory")
     public void consumeDeliveryCompleted(DeliveryCompletedEvent event) {
         Long memberId = orderClient.getMemberIdByOrderId(event.getOrderId());
         if (memberId == null || !settingService.isEnabled(memberId, NotificationType.DELIVERY)) {
