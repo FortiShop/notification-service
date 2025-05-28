@@ -21,10 +21,10 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public void createNotification(Long memberId, NotificationType type, String message) {
-        Notification notification = new Notification(memberId, type, message);
+    public void createNotification(Long memberId, NotificationType type, String message, String traceId) {
+        Notification notification = new Notification(memberId, type, message, traceId);
         notificationRepository.save(notification);
-        log.info("알림 생성 완료 - memberId={}, type={}, message={}", memberId, type, message);
+        log.info("알림 생성 완료 - memberId={}, type={}, message={}, traceId={}", memberId, type, message, traceId);
     }
 
     /**

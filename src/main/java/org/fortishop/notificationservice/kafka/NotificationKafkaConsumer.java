@@ -33,9 +33,9 @@ public class NotificationKafkaConsumer {
         }
 
         String message = "결제가 완료되었습니다. 금액: " + event.getPaidAmount() + "원";
-        notificationService.createNotification(memberId, NotificationType.ORDER, message);
+        notificationService.createNotification(memberId, NotificationType.ORDER, message, event.getTraceId());
         sseEmitterManager.sendToUser(memberId, message);
-        log.info("결제 성공 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
+        log.info("결제 성공 알림 전송 완료 - memberId={}, orderId={}, traceId={}", memberId, event.getOrderId(), event.getTraceId());
     }
 
     @KafkaListener(topics = "payment.failed", groupId = "notification-group", containerFactory = "paymentFailedListenerContainerFactory")
@@ -46,9 +46,9 @@ public class NotificationKafkaConsumer {
         }
 
         String message = "결제가 실패하였습니다: " + event.getReason();
-        notificationService.createNotification(memberId, NotificationType.ORDER, message);
+        notificationService.createNotification(memberId, NotificationType.ORDER, message, event.getTraceId());
         sseEmitterManager.sendToUser(memberId, message);
-        log.info("결제 실패 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
+        log.info("결제 실패 알림 전송 완료 - memberId={}, orderId={}, traceId={}", memberId, event.getOrderId(), event.getTraceId());
     }
 
     @KafkaListener(topics = "point.changed", groupId = "notification-group", containerFactory = "pointChangedListenerContainerFactory")
@@ -65,7 +65,7 @@ public class NotificationKafkaConsumer {
         };
 
         String message = prefix + " 금액: " + event.getAmount() + "원";
-        notificationService.createNotification(event.getMemberId(), NotificationType.POINT, message);
+        notificationService.createNotification(event.getMemberId(), NotificationType.POINT, message, event.getTraceId());
         sseEmitterManager.sendToUser(event.getMemberId(), message);
         log.info("포인트 알림 전송 완료 - memberId={}, type={}", event.getMemberId(), event.getChangeType());
     }
@@ -78,9 +78,9 @@ public class NotificationKafkaConsumer {
         }
 
         String message = "배송이 시작되었습니다. 운송장: " + event.getTrackingNumber();
-        notificationService.createNotification(memberId, NotificationType.DELIVERY, message);
+        notificationService.createNotification(memberId, NotificationType.DELIVERY, message, event.getTraceId());
         sseEmitterManager.sendToUser(memberId, message);
-        log.info("배송 시작 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
+        log.info("배송 시작 알림 전송 완료 - memberId={}, orderId={}, traceId={}", memberId, event.getOrderId(), event.getTraceId());
     }
 
     @KafkaListener(topics = "delivery.completed", groupId = "notification-group", containerFactory = "deliveryCompletedListenerContainerFactory")
@@ -91,8 +91,8 @@ public class NotificationKafkaConsumer {
         }
 
         String message = "배송이 완료되었습니다. 감사합니다.";
-        notificationService.createNotification(memberId, NotificationType.DELIVERY, message);
+        notificationService.createNotification(memberId, NotificationType.DELIVERY, message, event.getTraceId());
         sseEmitterManager.sendToUser(memberId, message);
-        log.info("배송 완료 알림 전송 완료 - memberId={}, orderId={}", memberId, event.getOrderId());
+        log.info("배송 완료 알림 전송 완료 - memberId={}, orderId={}, traceId={}", memberId, event.getOrderId(), event.getTraceId());
     }
 }

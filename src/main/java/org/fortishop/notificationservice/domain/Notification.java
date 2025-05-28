@@ -42,12 +42,15 @@ public class Notification {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    public Notification(Long memberId, NotificationType type, String message) {
+    private String traceId;
+
+    public Notification(Long memberId, NotificationType type, String message, String traceId) {
         this.memberId = memberId;
         this.type = type;
         this.message = message;
         this.status = NotificationStatus.UNREAD;
         this.createdAt = LocalDateTime.now();
+        this.traceId = traceId;
     }
 
     public void markAsRead() {

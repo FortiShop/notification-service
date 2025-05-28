@@ -39,7 +39,7 @@ class NotificationServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        notification = new Notification(1L, NotificationType.POINT, "포인트가 적립되었습니다.");
+        notification = new Notification(1L, NotificationType.POINT, "포인트가 적립되었습니다.", "123123123");
     }
 
     @Test
@@ -47,7 +47,7 @@ class NotificationServiceImplTest {
     void createNotification_success() {
         when(notificationRepository.save(any(Notification.class))).thenReturn(notification);
 
-        assertThatCode(() -> notificationService.createNotification(1L, NotificationType.POINT, "테스트 메시지"))
+        assertThatCode(() -> notificationService.createNotification(1L, NotificationType.POINT, "테스트 메시지", "123123123"))
                 .doesNotThrowAnyException();
 
         verify(notificationRepository, times(1)).save(any(Notification.class));
@@ -97,8 +97,8 @@ class NotificationServiceImplTest {
     @Test
     @DisplayName("알림 읽음 처리 - 일부 UNREAD")
     void markAsRead_partial() {
-        Notification unread = new Notification(1L, NotificationType.ORDER, "결제 완료");
-        Notification read = new Notification(1L, NotificationType.ORDER, "결제 완료");
+        Notification unread = new Notification(1L, NotificationType.ORDER, "결제 완료", "123123123");
+        Notification read = new Notification(1L, NotificationType.ORDER, "결제 완료", "123123123");
         read.markAsRead();
 
         when(notificationRepository.findByMemberIdAndIdIn(eq(1L), anyList())).thenReturn(List.of(unread, read));

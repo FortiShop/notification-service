@@ -6,7 +6,7 @@ import org.fortishop.notificationservice.dto.response.NotificationResponse;
 
 public interface NotificationService {
 
-    void createNotification(Long memberId, NotificationType type, String message);
+    void createNotification(Long memberId, NotificationType type, String message, String traceId);
 
     List<NotificationResponse> getRecent(Long memberId);
 

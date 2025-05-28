@@ -214,7 +214,7 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("알림 목록 조회 - 성공")
     void getNotifications_success() {
-        notificationRepository.save(new Notification(1L, NotificationType.ORDER, "테스트 메시지"));
+        notificationRepository.save(new Notification(1L, NotificationType.ORDER, "테스트 메시지", "12312123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-id", "1");
@@ -230,7 +230,7 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("알림 읽음 처리 - 성공")
     void markAsRead_success() {
-        Notification saved = notificationRepository.save(new Notification(1L, NotificationType.ORDER, "메시지"));
+        Notification saved = notificationRepository.save(new Notification(1L, NotificationType.ORDER, "메시지", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -252,7 +252,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("알림 삭제 - 성공")
     void deleteNotification_success() {
         Notification saved = notificationRepository.save(
-                new Notification(1L, NotificationType.ORDER, "삭제 테스트"));
+                new Notification(1L, NotificationType.ORDER, "삭제 테스트", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-id", "1");
@@ -372,7 +372,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("관리자 알림 재전송 - 성공")
     void resendNotification_success() {
         Notification saved = notificationRepository.save(
-                new Notification(1L, NotificationType.ORDER, "재전송 테스트"));
+                new Notification(1L, NotificationType.ORDER, "재전송 테스트", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-role", "ROLE_ADMIN");
@@ -388,8 +388,8 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("관리자 알림 조건 검색 - memberId, type, status")
     void searchNotification_success() {
-        Notification saved = notificationRepository.save(
-                new Notification(2L, NotificationType.POINT, "검색용"));
+        notificationRepository.save(
+                new Notification(2L, NotificationType.POINT, "검색용", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-role", "ROLE_ADMIN");
