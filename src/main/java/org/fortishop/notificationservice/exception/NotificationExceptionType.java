@@ -8,7 +8,8 @@ public enum NotificationExceptionType implements BaseExceptionType {
     ID_IS_EMPTY("N002", "알림 받을 ID를 찾을 수 없습니다.", HttpStatus.BAD_REQUEST),
     INVALID_REQUEST("N003", "잘못된 알림 생성 요청입니다.", HttpStatus.BAD_REQUEST),
     WRONG_ROLE("N004", "잘못된 권한입니다.", HttpStatus.BAD_REQUEST),
-    TEMPLATE_NOT_FOUND("N005", "해당 알림 템플릿을  찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+    TEMPLATE_NOT_FOUND("N005", "해당 알림 템플릿을  찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    TEMPLATE_ALREADY_EXIST("N006", "이미 등록된 타입의 템플릿 입니다. 삭제 후 진행해주세요.", HttpStatus.BAD_REQUEST);
 
     private final String errorCode;
     private final String errorMessage;

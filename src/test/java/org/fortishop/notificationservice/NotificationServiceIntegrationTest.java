@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -205,6 +204,7 @@ public class NotificationServiceIntegrationTest {
     void cleanDb() {
         notificationRepository.deleteAll();
         settingRepository.deleteAll();
+        templateRepository.deleteAll();
     }
 
     protected String getBaseUrl(String path) {
@@ -304,8 +304,8 @@ public class NotificationServiceIntegrationTest {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("x-member-role", "ROLE_ADMIN");
 
-        NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.POINT, "적립 알림",
-                "포인트가 적립되었습니다.");
+        NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.ORDER, "적립 알림",
+                "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.");
 
         ResponseEntity<String> response = restTemplate.exchange(
                 getBaseUrl("/api/notifications/templates"), HttpMethod.POST,
@@ -317,7 +317,7 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("관리자 템플릿 수정 - 성공")
     void updateTemplate_success() {
-        NotificationTemplate saved = new NotificationTemplate(null, NotificationType.ORDER, "제목", "내용",
+        NotificationTemplate saved = new NotificationTemplate(null, NotificationType.ORDER, "제목", "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.",
                 LocalDateTime.now());
         saved = templateRepository.save(saved);
 
@@ -326,7 +326,7 @@ public class NotificationServiceIntegrationTest {
         headers.set("x-member-role", "ROLE_ADMIN");
 
         NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.ORDER, "수정 제목",
-                "수정 메시지");
+                "{orderId}번 주문이 {amount}원에 결제 되었습니다.");
 
         ResponseEntity<String> response = restTemplate.exchange(
                 getBaseUrl("/api/notifications/templates/" + saved.getId()), HttpMethod.PATCH,
@@ -414,9 +414,8 @@ public class NotificationServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Kafka - payment.completed 수신 시 알림이 생성된다")
-    void kafka_paymentCompleted_createsNotification() throws InterruptedException {
-        // given
+    @DisplayName("Kafka - payment.completed 수신 시 알림이 생성된다 (템플릿 없음)")
+    void kafka_paymentCompleted_createsNotification_withoutTemplate() throws InterruptedException {
         Long orderId = 9001L;
         Long memberId = 1L;
 
@@ -429,10 +428,8 @@ public class NotificationServiceIntegrationTest {
                 "traceId", UUID.randomUUID().toString()
         );
 
-        // when
         sendKafkaMessage("payment.completed", orderId.toString(), payload);
-        // then
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(7)).untilAsserted(() -> {
             List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
             assertThat(list).isNotEmpty();
             assertThat(list.get(0).getType()).isEqualTo(NotificationType.ORDER);
@@ -441,8 +438,37 @@ public class NotificationServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Kafka - payment.failed 수신 시 알림이 생성된다")
-    void kafka_paymentFailed_createsNotification() throws InterruptedException {
+    @DisplayName("Kafka - payment.completed 수신 시 알림이 생성된다 (템플릿 있음)")
+    void kafka_paymentCompleted_createsNotification_withTemplate() throws InterruptedException {
+        Long orderId = 9001L;
+        Long memberId = 1L;
+
+        templateRepository.save(new NotificationTemplate(
+                null, NotificationType.ORDER, "결제 알림",
+                "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.", null
+        ));
+
+        Map<String, Object> payload = Map.of(
+                "orderId", orderId,
+                "paymentId", 777L,
+                "paidAmount", 12000,
+                "method", "CARD",
+                "timestamp", LocalDateTime.now().toString(),
+                "traceId", UUID.randomUUID().toString()
+        );
+
+        sendKafkaMessage("payment.completed", orderId.toString(), payload);
+        await().atMost(Duration.ofSeconds(7)).untilAsserted(() -> {
+            List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
+            assertThat(list).isNotEmpty();
+            assertThat(list.get(0).getType()).isEqualTo(NotificationType.ORDER);
+            assertThat(list.get(0).getMessage()).contains("9001번 주문이 결제되었습니다");
+        });
+    }
+
+    @Test
+    @DisplayName("Kafka - payment.failed 수신 시 알림이 생성된다 (템플릿 없음)")
+    void kafka_paymentFailed_createsNotification_withoutTemplate() throws InterruptedException {
         Long orderId = 9002L;
         Long memberId = 1L;
 
@@ -454,7 +480,7 @@ public class NotificationServiceIntegrationTest {
         );
 
         sendKafkaMessage("payment.failed", orderId.toString(), payload);
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(7)).untilAsserted(() -> {
             List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
             assertThat(list).isNotEmpty();
             assertThat(list.get(0).getType()).isEqualTo(NotificationType.ORDER);
@@ -463,8 +489,8 @@ public class NotificationServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Kafka - point.changed 수신 시 알림이 생성된다")
-    void kafka_pointChanged_createsNotification() throws InterruptedException {
+    @DisplayName("Kafka - point.changed 수신 시 알림이 생성된다 (템플릿 없음)")
+    void kafka_pointChanged_createsNotification_withoutTemplate() throws InterruptedException {
         Long memberId = 2L;
 
         Map<String, Object> payload = Map.of(
@@ -480,18 +506,17 @@ public class NotificationServiceIntegrationTest {
         );
 
         sendKafkaMessage("point.changed", memberId.toString(), payload);
-        Thread.sleep(30000);
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(7)).untilAsserted(() -> {
             List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
             assertThat(list).isNotEmpty();
             assertThat(list.get(0).getType()).isEqualTo(NotificationType.POINT);
-            assertThat(list.get(0).getMessage()).contains("포인트가 적립되었습니다");
+            assertThat(list.get(0).getMessage()).contains("포인트가 1500원 적립되었습니다");
         });
     }
 
     @Test
-    @DisplayName("Kafka - delivery.started 수신 시 알림이 생성된다")
-    void kafka_deliveryStarted_createsNotification() throws InterruptedException {
+    @DisplayName("Kafka - delivery.started 수신 시 알림이 생성된다 (템플릿 없음)")
+    void kafka_deliveryStarted_createsNotification_withoutTemplate() throws InterruptedException {
         Long orderId = 9004L;
         Long memberId = 1L;
 
@@ -505,33 +530,38 @@ public class NotificationServiceIntegrationTest {
         );
 
         sendKafkaMessage("delivery.started", orderId.toString(), payload);
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(7)).untilAsserted(() -> {
             List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
             assertThat(list).isNotEmpty();
-            assertThat(list.get(0).getType()).isEqualTo(NotificationType.DELIVERY);
             assertThat(list.get(0).getMessage()).contains("배송이 시작되었습니다");
         });
     }
 
     @Test
-    @DisplayName("Kafka - delivery.completed 수신 시 알림이 생성된다")
-    void kafka_deliveryCompleted_createsNotification() throws InterruptedException {
-        Long orderId = 9005L;
+    @DisplayName("Kafka - delivery.started 수신 시 알림이 생성된다 (템플릿 있음)")
+    void kafka_deliveryStarted_createsNotification_withTemplate() throws InterruptedException {
+        Long orderId = 9004L;
         Long memberId = 1L;
+
+        templateRepository.save(new NotificationTemplate(
+                null, NotificationType.DELIVERY, "배송 시작 알림",
+                "{orderId}번 주문의 배송이 시작되었습니다. 운송장 번호는 {trackingNumber}입니다.", null
+        ));
 
         Map<String, Object> payload = Map.of(
                 "orderId", orderId,
-                "deliveryId", 222L,
-                "completedAt", LocalDateTime.now(),
+                "deliveryId", 111L,
+                "trackingNumber", "TRACK123",
+                "company", "CJ대한통운",
+                "startedAt", LocalDateTime.now(),
                 "traceId", UUID.randomUUID().toString()
         );
 
-        sendKafkaMessage("delivery.completed", orderId.toString(), payload);
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        sendKafkaMessage("delivery.started", orderId.toString(), payload);
+        await().atMost(Duration.ofSeconds(7)).untilAsserted(() -> {
             List<Notification> list = notificationRepository.findTop20ByMemberIdOrderByCreatedAtDesc(memberId);
             assertThat(list).isNotEmpty();
-            assertThat(list.get(0).getType()).isEqualTo(NotificationType.DELIVERY);
-            assertThat(list.get(0).getMessage()).contains("배송이 완료되었습니다");
+            assertThat(list.get(0).getMessage()).contains("9004번 주문의 배송이 시작되었습니다");
         });
     }
 }

@@ -34,13 +34,13 @@ class NotificationTemplateServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        template = new NotificationTemplate(1L, NotificationType.ORDER, "주문 알림", "주문이 완료되었습니다.", LocalDateTime.now());
+        template = new NotificationTemplate(1L, NotificationType.ORDER, "주문 알림", "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.", LocalDateTime.now());
     }
 
     @Test
     @DisplayName("템플릿 등록 - 성공")
     void create_success() {
-        NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.ORDER, "제목", "내용");
+        NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.ORDER, "제목", "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.");
 
         templateService.create(request);
 
@@ -53,12 +53,12 @@ class NotificationTemplateServiceImplTest {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
 
         NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.ORDER, "수정된 제목",
-                "수정된 메시지");
+                "수정 {orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.");
 
         templateService.update(1L, request);
 
         assertThat(template.getTitle()).isEqualTo("수정된 제목");
-        assertThat(template.getMessage()).isEqualTo("수정된 메시지");
+        assertThat(template.getMessage()).isEqualTo("수정 {orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.");
     }
 
     @Test

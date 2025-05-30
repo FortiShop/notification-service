@@ -3,6 +3,7 @@ package org.fortishop.notificationservice.service;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.fortishop.notificationservice.domain.NotificationTemplate;
+import org.fortishop.notificationservice.domain.NotificationType;
 import org.fortishop.notificationservice.dto.request.NotificationTemplateRequest;
 import org.fortishop.notificationservice.dto.response.NotificationTemplateResponse;
 import org.fortishop.notificationservice.exception.NotificationException;
@@ -22,6 +23,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional
     public void create(NotificationTemplateRequest request) {
+        if (templateRepository.findByType(request.getType()).isPresent()) {
+            throw new NotificationException(NotificationExceptionType.TEMPLATE_ALREADY_EXIST);
+        }
+
+        validateMessageTemplate(request.getType(), request.getMessage());
+
         NotificationTemplate template = new NotificationTemplate(
                 null,
                 request.getType(),
@@ -40,6 +47,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     public void update(Long id, NotificationTemplateRequest request) {
         NotificationTemplate template = templateRepository.findById(id)
                 .orElseThrow(() -> new NotificationException(NotificationExceptionType.TEMPLATE_NOT_FOUND));
+        validateMessageTemplate(request.getType(), request.getMessage());
         template.update(request.getTitle(), request.getMessage());
     }
 
@@ -64,5 +72,23 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
                 .stream()
                 .map(NotificationTemplateResponse::of)
                 .toList();
+    }
+
+    private void validateMessageTemplate(NotificationType type, String message) {
+        switch (type) {
+            case ORDER:
+            case POINT:
+                if (!message.contains("{orderId}") || !message.contains("{amount}")) {
+                    throw new NotificationException(NotificationExceptionType.INVALID_REQUEST);
+                }
+                break;
+            case DELIVERY:
+                if (!message.contains("{orderId}")) {
+                    throw new NotificationException(NotificationExceptionType.INVALID_REQUEST);
+                }
+                break;
+            default:
+                break;
+        }
     }
 }
