@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.fortishop.orderpaymentservice.domain.OrderItem;
 
 @Getter
 @Builder
