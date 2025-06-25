@@ -1,50 +1,43 @@
 package org.fortishop.notificationservice.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
-@Entity
-@Table(name = "notifications")
+@Document(collection = "notifications")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class Notification {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Field("memberId")
     private Long memberId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Field("type")
     private NotificationType type;
 
-    @Column(nullable = false)
+    @Field("message")
     private String message;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Field("status")
     private NotificationStatus status;
 
-    @Column(nullable = false)
+    @Field("createdAt")
     private LocalDateTime createdAt;
 
+    @Field("traceId")
     private String traceId;
 
-    public Notification(Long memberId, NotificationType type, String message, String traceId) {
+    public Notification(Long newId, Long memberId, NotificationType type, String message, String traceId) {
+        this.id = newId;
         this.memberId = memberId;
         this.type = type;
         this.message = message;

@@ -4,11 +4,11 @@ import java.util.List;
 import org.fortishop.notificationservice.domain.Notification;
 import org.fortishop.notificationservice.domain.NotificationStatus;
 import org.fortishop.notificationservice.domain.NotificationType;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface NotificationRepository extends JpaRepository<Notification, Long> {
+public interface NotificationRepository extends MongoRepository<Notification, Long> {
 
     // 최근 알림 20개 조회
     List<Notification> findTop20ByMemberIdOrderByCreatedAtDesc(Long memberId);

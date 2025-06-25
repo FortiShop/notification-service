@@ -32,13 +32,13 @@ class AdminNotificationServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        notification = new Notification(1L, NotificationType.ORDER, "주문 완료", "123123123");
+        notification = new Notification(1L, 1L, NotificationType.ORDER, "주문 완료", "123123123");
     }
 
     @Test
     @DisplayName("알림 검색 - 필터 조건 적용")
     void search_filtered() {
-        Notification another = new Notification(2L, NotificationType.POINT, "포인트 지급", "12312123");
+        Notification another = new Notification(2L, 2L, NotificationType.POINT, "포인트 지급", "12312123");
         another.markAsRead();
         when(notificationRepository.findAll()).thenReturn(List.of(notification, another));
 

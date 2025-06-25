@@ -56,7 +56,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -95,10 +95,8 @@ public class NotificationServiceIntegrationTest {
     NotificationOrderClient orderClient;
 
     @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-            .withDatabaseName("fortishop")
-            .withUsername("test")
-            .withPassword("test");
+    static MongoDBContainer mongo = new MongoDBContainer("mongo:6.0")
+            .withExposedPorts(27017);
 
     @Container
     static GenericContainer<?> zookeeper = new GenericContainer<>(DockerImageName.parse("bitnami/zookeeper:3.8.1"))
@@ -140,14 +138,12 @@ public class NotificationServiceIntegrationTest {
 
     @DynamicPropertySource
     static void overrideProps(DynamicPropertyRegistry registry) {
-        mysql.start();
+        mongo.start();
         zookeeper.start();
         kafka.start();
         kafkaUi.start();
 
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
         registry.add("spring.kafka.bootstrap-servers", () -> kafka.getHost() + ":" + kafka.getMappedPort(9093));
     }
 
@@ -214,7 +210,7 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("알림 목록 조회 - 성공")
     void getNotifications_success() {
-        notificationRepository.save(new Notification(1L, NotificationType.ORDER, "테스트 메시지", "12312123"));
+        notificationRepository.save(new Notification(1L, 1L, NotificationType.ORDER, "테스트 메시지", "12312123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-id", "1");
@@ -230,8 +226,8 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("알림 읽음 처리 - 성공")
     void markAsRead_success() {
-        Notification saved = notificationRepository.save(new Notification(1L, NotificationType.ORDER, "메시지", "123123123"));
-
+        Notification n = new Notification(1L, 1L, NotificationType.ORDER, "메시지", "123123123");
+        Notification saved = notificationRepository.save(n);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("x-member-id", "1");
@@ -252,7 +248,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("알림 삭제 - 성공")
     void deleteNotification_success() {
         Notification saved = notificationRepository.save(
-                new Notification(1L, NotificationType.ORDER, "삭제 테스트", "123123123"));
+                new Notification(1L, 1L, NotificationType.ORDER, "삭제 테스트", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-id", "1");
@@ -317,7 +313,7 @@ public class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("관리자 템플릿 수정 - 성공")
     void updateTemplate_success() {
-        NotificationTemplate saved = new NotificationTemplate(null, NotificationType.ORDER, "제목", "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.",
+        NotificationTemplate saved = new NotificationTemplate(1L, NotificationType.ORDER, "제목", "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.",
                 LocalDateTime.now());
         saved = templateRepository.save(saved);
 
@@ -339,7 +335,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("관리자 템플릿 삭제 - 성공")
     void deleteTemplate_success() {
         NotificationTemplate saved = templateRepository.save(
-                new NotificationTemplate(null, NotificationType.SYSTEM, "삭제 제목", "삭제 메시지", LocalDateTime.now()));
+                new NotificationTemplate(1L, NotificationType.SYSTEM, "삭제 제목", "삭제 메시지", LocalDateTime.now()));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-role", "ROLE_ADMIN");
@@ -355,7 +351,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("관리자 템플릿 목록 조회")
     void getAllTemplates_success() {
         templateRepository.save(
-                new NotificationTemplate(null, NotificationType.ORDER, "목록 제목", "내용", LocalDateTime.now()));
+                new NotificationTemplate(1L, NotificationType.ORDER, "목록 제목", "내용", LocalDateTime.now()));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-role", "ROLE_ADMIN");
@@ -372,7 +368,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("관리자 알림 재전송 - 성공")
     void resendNotification_success() {
         Notification saved = notificationRepository.save(
-                new Notification(1L, NotificationType.ORDER, "재전송 테스트", "123123123"));
+                new Notification(1L, 1L, NotificationType.ORDER, "재전송 테스트", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-role", "ROLE_ADMIN");
@@ -389,7 +385,7 @@ public class NotificationServiceIntegrationTest {
     @DisplayName("관리자 알림 조건 검색 - memberId, type, status")
     void searchNotification_success() {
         notificationRepository.save(
-                new Notification(2L, NotificationType.POINT, "검색용", "123123123"));
+                new Notification(1L, 2L, NotificationType.POINT, "검색용", "123123123"));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-member-role", "ROLE_ADMIN");
@@ -444,7 +440,7 @@ public class NotificationServiceIntegrationTest {
         Long memberId = 1L;
 
         templateRepository.save(new NotificationTemplate(
-                null, NotificationType.ORDER, "결제 알림",
+                1L, NotificationType.ORDER, "결제 알림",
                 "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.", null
         ));
 
@@ -544,7 +540,7 @@ public class NotificationServiceIntegrationTest {
         Long memberId = 1L;
 
         templateRepository.save(new NotificationTemplate(
-                null, NotificationType.DELIVERY, "배송 시작 알림",
+                1L, NotificationType.DELIVERY, "배송 시작 알림",
                 "{orderId}번 주문의 배송이 시작되었습니다. 운송장 번호는 {trackingNumber}입니다.", null
         ));
 

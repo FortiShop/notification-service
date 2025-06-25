@@ -8,6 +8,7 @@ import org.fortishop.notificationservice.dto.request.NotificationTemplateRequest
 import org.fortishop.notificationservice.dto.response.NotificationTemplateResponse;
 import org.fortishop.notificationservice.exception.NotificationException;
 import org.fortishop.notificationservice.exception.NotificationExceptionType;
+import org.fortishop.notificationservice.global.SequenceGenerator;
 import org.fortishop.notificationservice.repository.NotificationTemplateRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class NotificationTemplateServiceImpl implements NotificationTemplateService {
     private final NotificationTemplateRepository templateRepository;
+    private final SequenceGenerator sequenceGenerator;
 
     /**
      * 템플릿 등록
@@ -27,10 +29,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
             throw new NotificationException(NotificationExceptionType.TEMPLATE_ALREADY_EXIST);
         }
 
+        long newId = sequenceGenerator.generateSequence("notification_templates_sequence");
+
         validateMessageTemplate(request.getType(), request.getMessage());
 
         NotificationTemplate template = new NotificationTemplate(
-                null,
+                newId,
                 request.getType(),
                 request.getTitle(),
                 request.getMessage(),
@@ -49,6 +53,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
                 .orElseThrow(() -> new NotificationException(NotificationExceptionType.TEMPLATE_NOT_FOUND));
         validateMessageTemplate(request.getType(), request.getMessage());
         template.update(request.getTitle(), request.getMessage());
+        templateRepository.save(template);
     }
 
     /**

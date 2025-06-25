@@ -1,6 +1,7 @@
 package org.fortishop.notificationservice.service;
 
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.fortishop.notificationservice.domain.Notification;
@@ -9,6 +10,7 @@ import org.fortishop.notificationservice.domain.NotificationType;
 import org.fortishop.notificationservice.dto.response.NotificationResponse;
 import org.fortishop.notificationservice.exception.NotificationException;
 import org.fortishop.notificationservice.exception.NotificationExceptionType;
+import org.fortishop.notificationservice.global.SequenceGenerator;
 import org.fortishop.notificationservice.repository.NotificationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +20,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
+    private final SequenceGenerator sequenceGenerator;
 
     @Override
     @Transactional
     public void createNotification(Long memberId, NotificationType type, String message, String traceId) {
-        Notification notification = new Notification(memberId, type, message, traceId);
+        long newId = sequenceGenerator.generateSequence("notifications_sequence");
+        Notification notification = new Notification(newId, memberId, type, message, traceId);
         notificationRepository.save(notification);
         log.info("알림 생성 완료 - memberId={}, type={}, message={}, traceId={}", memberId, type, message, traceId);
     }
@@ -67,17 +71,20 @@ public class NotificationServiceImpl implements NotificationService {
     /**
      * 읽음 처리
      */
-    @Override
     @Transactional
     public void markAsRead(Long memberId, List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             throw new NotificationException(NotificationExceptionType.ID_IS_EMPTY);
         }
 
-        List<Notification> notifications = notificationRepository.findByMemberIdAndIdIn(memberId, ids);
-        notifications.stream()
-                .filter(n -> n.getStatus() == NotificationStatus.UNREAD)
-                .forEach(Notification::markAsRead);
+        List<Notification> notifications = notificationRepository.findAllById(ids).stream()
+                .filter(n -> Objects.equals(n.getMemberId(), memberId))
+                .filter(n -> NotificationStatus.UNREAD.equals(n.getStatus()))
+                .toList();
+
+        notifications.forEach(Notification::markAsRead);
+
+        notificationRepository.saveAll(notifications);
     }
 
     /**

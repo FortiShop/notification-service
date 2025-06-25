@@ -13,6 +13,7 @@ import org.fortishop.notificationservice.domain.NotificationTemplate;
 import org.fortishop.notificationservice.domain.NotificationType;
 import org.fortishop.notificationservice.dto.request.NotificationTemplateRequest;
 import org.fortishop.notificationservice.exception.NotificationException;
+import org.fortishop.notificationservice.global.SequenceGenerator;
 import org.fortishop.notificationservice.repository.NotificationTemplateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +30,9 @@ class NotificationTemplateServiceImplTest {
     @InjectMocks
     private NotificationTemplateServiceImpl templateService;
 
+    @Mock
+    private SequenceGenerator sequenceGenerator;
+
     private NotificationTemplate template;
 
     @BeforeEach
@@ -40,6 +44,7 @@ class NotificationTemplateServiceImplTest {
     @Test
     @DisplayName("템플릿 등록 - 성공")
     void create_success() {
+        when(sequenceGenerator.generateSequence("notifications_sequence")).thenReturn(1L);
         NotificationTemplateRequest request = new NotificationTemplateRequest(NotificationType.ORDER, "제목", "{orderId}번 주문이 결제되었습니다. 결제 금액: {amount}원입니다.");
 
         templateService.create(request);

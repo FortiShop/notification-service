@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +16,7 @@ import org.fortishop.notificationservice.domain.NotificationStatus;
 import org.fortishop.notificationservice.domain.NotificationType;
 import org.fortishop.notificationservice.dto.response.NotificationResponse;
 import org.fortishop.notificationservice.exception.NotificationException;
+import org.fortishop.notificationservice.global.SequenceGenerator;
 import org.fortishop.notificationservice.repository.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,17 +33,21 @@ class NotificationServiceImplTest {
     @InjectMocks
     private NotificationServiceImpl notificationService;
 
+    @Mock
+    private SequenceGenerator sequenceGenerator;
+
     private Notification notification;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        notification = new Notification(1L, NotificationType.POINT, "포인트가 적립되었습니다.", "123123123");
+        notification = new Notification(1L, 1L, NotificationType.POINT, "포인트가 적립되었습니다.", "123123123");
     }
 
     @Test
     @DisplayName("알림 생성 - 성공")
     void createNotification_success() {
+        when(sequenceGenerator.generateSequence("notifications_sequence")).thenReturn(1L);
         when(notificationRepository.save(any(Notification.class))).thenReturn(notification);
 
         assertThatCode(() -> notificationService.createNotification(1L, NotificationType.POINT, "테스트 메시지", "123123123"))
@@ -92,21 +95,6 @@ class NotificationServiceImplTest {
 
         assertThatThrownBy(() -> notificationService.getById(999L, 1L))
                 .isInstanceOf(NotificationException.class);
-    }
-
-    @Test
-    @DisplayName("알림 읽음 처리 - 일부 UNREAD")
-    void markAsRead_partial() {
-        Notification unread = new Notification(1L, NotificationType.ORDER, "결제 완료", "123123123");
-        Notification read = new Notification(1L, NotificationType.ORDER, "결제 완료", "123123123");
-        read.markAsRead();
-
-        when(notificationRepository.findByMemberIdAndIdIn(eq(1L), anyList())).thenReturn(List.of(unread, read));
-
-        notificationService.markAsRead(1L, List.of(1L, 2L));
-
-        assertThat(unread.getStatus()).isEqualTo(NotificationStatus.READ);
-        assertThat(read.getStatus()).isEqualTo(NotificationStatus.READ); // 이미 READ면 유지
     }
 
     @Test

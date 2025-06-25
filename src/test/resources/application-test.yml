@@ -5,20 +5,9 @@ spring:
   application:
     name: notification-service
 
-  datasource:
-    url: jdbc:mysql://localhost:3306/testdb
-    username: test
-    password: test
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.MySQL8Dialect
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/fortishop
 
   kafka:
     admin:
